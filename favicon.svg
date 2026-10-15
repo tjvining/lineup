@@ -1,27 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="steel" x1="12" y1="8" x2="52" y2="58" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#45464a"/>
-      <stop offset=".52" stop-color="#18191d"/>
-      <stop offset="1" stop-color="#090a0d"/>
-    </linearGradient>
-    <linearGradient id="ember" x1="14" y1="16" x2="47" y2="49" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ffb278"/>
-      <stop offset=".55" stop-color="#fb714d"/>
-      <stop offset="1" stop-color="#c93632"/>
-    </linearGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="2.4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <path d="M18 3h28l15 15v28L46 61H18L3 46V18z" fill="url(#steel)" stroke="#8c6c58" stroke-width="1.5"/>
-  <path d="M19 9h26l10 10v26L45 55H19L9 45V19z" fill="none" stroke="#ffffff" stroke-opacity=".14"/>
-  <path d="M44 16H24l-4 12 20 8-4 12H17" fill="none" stroke="#f6eee6" stroke-width="5.4" stroke-linecap="square" stroke-linejoin="bevel"/>
-  <path d="m47 13-8 20h8L28 52l7-16h-8z" fill="url(#ember)" filter="url(#glow)"/>
-  <path d="M13 16 16 13m34 38 3-3" stroke="#fff" stroke-opacity=".35" stroke-width="1.2"/>
-  <circle cx="19" cy="57" r="1.4" fill="#52bbd2"/>
-  <circle cx="28" cy="57" r="1.4" fill="#e2b15e"/>
-  <circle cx="37" cy="57" r="1.4" fill="#e76b56"/>
-  <circle cx="46" cy="57" r="1.4" fill="#b490db"/>
+  <rect width="64" height="64" rx="14" fill="#111216"/>
+  <text x="32" y="48" text-anchor="middle" font-size="46" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">🤘</text>
 </svg>
