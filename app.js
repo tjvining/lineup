@@ -6,33 +6,31 @@ const stages=[
  {key:'diablo',name:'Diablo Stage',color:'diablo',acts:['Dead City','The Dark.FM','The Tony Danza Tapdance Extravaganza','Ego Kill Talent','TSS','Pain of Truth','Peelingflesh','Haywire','Norma Jean','Speed','Sleep Theory','Superheaven','Terror','Deafheaven','Sunami','Glassjaw','Underoath','Wage War','Poison the Well'],times:[['11:40','12:00'],['12:05','12:25'],['12:30','12:50'],['12:55','13:15'],['13:20','13:45'],['13:50','14:20'],['14:25','14:55'],['15:00','15:30'],['15:35','16:05'],['16:10','16:40'],['16:45','17:15'],['17:20','17:50'],['17:55','18:25'],['18:30','19:00'],['19:05','19:35'],['19:40','20:10'],['20:15','20:45'],['20:50','21:20'],['21:25','22:10']]}
 ];
 const legacyActNames={'The Dark.FM':'The Dark','Underoath':'Underøath'};
-// Local-only prototype storage. The snw-planner-v1 key is deliberately separate from other microsites.
+// Keep local browser storage for the viewed/signed-in profile and theme only; picks live in Firebase.
 const STORAGE_KEY='snw-planner-v1';
-let db={users:{}};try{db=JSON.parse(localStorage.getItem(STORAGE_KEY))||db}catch{}
-Object.values(db.users||{}).forEach(picks=>Object.entries(legacyActNames).forEach(([act,legacy])=>{if(picks[act]===undefined&&picks[legacy]!==undefined)picks[act]=picks[legacy];delete picks[legacy]}));
+let db={users:{}};
+try{localStorage.removeItem(STORAGE_KEY);localStorage.removeItem(STORAGE_KEY+':firebase-imported')}catch{}
 let currentUser=localStorage.getItem(STORAGE_KEY+':active')||'';
 // The remembered profile is the only profile permitted to make changes. Other tabs are read-only views.
 let signedInUser=localStorage.getItem(STORAGE_KEY+':signed-in')||currentUser;
 let chosenName='';let toastTimer;
-let profilesRef=null;let firebaseReady=false;let pendingRemoteWrites=[];let localImportStarted=false;
-const IMPORT_KEY=STORAGE_KEY+':firebase-imported';
+let profilesRef=null;let firebaseReady=false;let pendingRemoteWrites=[];
 const $=id=>document.getElementById(id);
 function setSaveStatus(message){const target=$('saveStatus');if(target)target.textContent=message}
 function personKey(person){return person.toLowerCase()}
 function pickKey(act){return act.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(db));$('viewingLabel').textContent=`VIEWING ${currentUser.toUpperCase()}’S PICKS`;setSaveStatus(firebaseReady?'SYNCED TO FIREBASE':'SAVED ON THIS DEVICE')}
-function runRemoteWrite(write){if(!profilesRef)return;if(!firebaseReady){pendingRemoteWrites.push(write);return}write().then(()=>setSaveStatus('SYNCED TO FIREBASE')).catch(()=>setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED'))}
+function save(){$('viewingLabel').textContent=`VIEWING ${currentUser.toUpperCase()}’S PICKS`;setSaveStatus(firebaseReady?'SAVING TO FIREBASE…':'CONNECTING TO FIREBASE…')}
+function runRemoteWrite(write){if(!profilesRef)return;if(!firebaseReady){pendingRemoteWrites.push(write);return}write().then(()=>setSaveStatus('LIVE · SYNCED TO FIREBASE')).catch(()=>setSaveStatus('FIREBASE SYNC ISSUE · CHANGES NOT SAVED'))}
 function persistRemotePick(person,act,value){runRemoteWrite(()=>{const profileRef=profilesRef.child(personKey(person));if(legacyActNames[act])return profileRef.update({[pickKey(act)]:value||null,[pickKey(legacyActNames[act])]:null});return profileRef.child(pickKey(act)).set(value||null)})}
 function clearRemoteProfile(person){runRemoteWrite(()=>profilesRef.child(personKey(person)).remove())}
-function flushRemoteWrites(){const queued=pendingRemoteWrites.splice(0);queued.reduce((chain,write)=>chain.then(()=>write()).catch(()=>setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED')),Promise.resolve())}
+function flushRemoteWrites(){const queued=pendingRemoteWrites.splice(0);queued.reduce((chain,write)=>chain.then(()=>write()).catch(()=>setSaveStatus('FIREBASE SYNC ISSUE · CHANGES NOT SAVED')),Promise.resolve())}
 function startFirebaseSync(){
- if(!window.firebase||!window.SNW_FIREBASE_CONFIG){setSaveStatus('LOCAL ONLY · FIREBASE UNAVAILABLE');return}
+ if(!window.firebase||!window.SNW_FIREBASE_CONFIG){firebaseReady=false;db.users={};render();setSaveStatus('FIREBASE UNAVAILABLE · PICKS NOT LOADED');return}
  try{if(!firebase.apps.length)firebase.initializeApp(window.SNW_FIREBASE_CONFIG);profilesRef=firebase.database().ref('sickNewWorldLineup/profiles');setSaveStatus('CONNECTING TO FIREBASE…');profilesRef.on('value',snapshot=>{
-  const remote=snapshot.val()||{};const cached=db.users||{};const users={};const imports=[];
-  peopleList.forEach(person=>{users[person]={...(cached[person]||{})};const remotePicks=remote[personKey(person)]||{};stages.forEach(stage=>stage.acts.forEach(act=>{const key=pickKey(act);const legacyKey=legacyActNames[act]?pickKey(legacyActNames[act]):null;const hasRemote=Object.prototype.hasOwnProperty.call(remotePicks,key)||(legacyKey&&Object.prototype.hasOwnProperty.call(remotePicks,legacyKey));const value=Object.prototype.hasOwnProperty.call(remotePicks,key)?remotePicks[key]:legacyKey?remotePicks[legacyKey]:undefined;const localValue=cached[person]?.[act]??(legacyActNames[act]?cached[person]?.[legacyActNames[act]]:undefined);if(['must','love','maybe'].includes(value)){users[person][act]=value;if(legacyKey&&remotePicks[key]===undefined)imports.push({person,act,value})}else if(hasRemote){delete users[person][act]}else if(['must','love','maybe'].includes(localValue)){users[person][act]=localValue;if(!localImportStarted&&!localStorage.getItem(IMPORT_KEY))imports.push({person,act,value:localValue})}}))});
-  db.users=users;localStorage.setItem(STORAGE_KEY,JSON.stringify(db));render();
-  if(!localImportStarted&&!localStorage.getItem(IMPORT_KEY)){localImportStarted=true;if(imports.length){setSaveStatus('IMPORTING SAVED PICKS…');Promise.all(imports.map(item=>profilesRef.child(personKey(item.person)).child(pickKey(item.act)).set(item.value))).then(()=>{localStorage.setItem(IMPORT_KEY,'1');firebaseReady=true;setSaveStatus('SYNCED TO FIREBASE');flushRemoteWrites()}).catch(()=>{firebaseReady=true;imports.forEach(item=>pendingRemoteWrites.push(()=>profilesRef.child(personKey(item.person)).child(pickKey(item.act)).set(item.value)));setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED');flushRemoteWrites()})}else{localStorage.setItem(IMPORT_KEY,'1');firebaseReady=true;setSaveStatus('SYNCED TO FIREBASE');flushRemoteWrites()}}else{firebaseReady=true;setSaveStatus('SYNCED TO FIREBASE');flushRemoteWrites()}
- },error=>{firebaseReady=false;setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED');console.warn('Sick New World Firebase sync failed:',error.code||error.message)})}catch(error){setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED');console.warn('Sick New World Firebase setup failed:',error.message)}
+  const remote=snapshot.val()||{};const users={};
+  peopleList.forEach(person=>{users[person]={};const remotePicks=remote[personKey(person)]||{};stages.forEach(stage=>stage.acts.forEach(act=>{const key=pickKey(act);const legacyKey=legacyActNames[act]?pickKey(legacyActNames[act]):null;const value=Object.prototype.hasOwnProperty.call(remotePicks,key)?remotePicks[key]:legacyKey?remotePicks[legacyKey]:undefined;if(['must','love','maybe'].includes(value))users[person][act]=value}))});
+  db.users=users;firebaseReady=true;render();setSaveStatus('LIVE · SYNCED TO FIREBASE');flushRemoteWrites();
+ },error=>{firebaseReady=false;db.users={};render();setSaveStatus('FIREBASE SYNC ISSUE · PICKS NOT LOADED');console.warn('Sick New World Firebase sync failed:',error.code||error.message)})}catch(error){firebaseReady=false;db.users={};render();setSaveStatus('FIREBASE SYNC ISSUE · PICKS NOT LOADED');console.warn('Sick New World Firebase setup failed:',error.message)}
 }
 function pretty(t){let [h,m]=t.split(':').map(Number);let suffix=h>=12?'PM':'AM';return `${h%12||12}:${String(m).padStart(2,'0')} ${suffix}`}
 function addMins(t,n){let [h,m]=t.split(':').map(Number);let x=h*60+m+n;return `${String(Math.floor(x/60)).padStart(2,'0')}:${String(x%60).padStart(2,'0')}`}
@@ -57,7 +55,7 @@ function renderPeople(){ $('people').innerHTML=peopleList.map(n=>`<button class=
 function renderTimeline(){
  const events=[];stages.forEach(stage=>stage.acts.forEach((act,index)=>events.push({...schedule(stage,index),stage,act,index})));
  const conflicts=conflictsFor(events.filter(event=>db.users[currentUser]?.[event.act]));
- const editable=Boolean(currentUser&&signedInUser&&currentUser===signedInUser);
+ const editable=Boolean(firebaseReady&&currentUser&&signedInUser&&currentUser===signedInUser);
  const mobile=window.matchMedia('(max-width: 760px)').matches;
  const labels={must:'MUST SEE',love:'WOULD LOVE',maybe:'MAYBE'};
  if(mobile){
@@ -74,7 +72,7 @@ function renderTimeline(){
   $('timeline').className='timeline proportional-timeline';$('timeline').innerHTML=html;
  }
  document.querySelectorAll('[data-act]').forEach(button=>button.onclick=()=>cycle(decodeURIComponent(button.dataset.act)));
- $('editHint').textContent=editable?'SELECT A SET TO SET YOUR PRIORITY':signedInUser?`VIEW ONLY · ${signedInUser.toUpperCase()} IS SIGNED IN`:'SIGN IN TO EDIT YOUR PICKS';
+ $('editHint').textContent=editable?'SELECT A SET TO SET YOUR PRIORITY':!firebaseReady?'CONNECTING TO FIREBASE…':signedInUser?`VIEW ONLY · ${signedInUser.toUpperCase()} IS SIGNED IN`:'SIGN IN TO EDIT YOUR PICKS';
  $('clearBtn').disabled=!editable;$('shareBtn').textContent=editable?'COPY MY PICKS ↗':'COPY VIEWED PICKS ↗';renderSummaries();
 }
 function render(){if(!db.users[currentUser])db.users[currentUser]={};renderPeople();$('profileBtn').textContent=signedInUser?signedInUser[0]:'?';$('profileBtn').setAttribute('aria-label',signedInUser?`Signed in as ${signedInUser}. Change profile`:'Sign in to your profile');$('viewingLabel').textContent=currentUser?`VIEWING ${currentUser.toUpperCase()}’S PICKS`:'';document.querySelector('.title-row h2').textContent=currentUser?`${currentUser}’s schedule`:'Your schedule';renderTimeline()}
