@@ -22,7 +22,7 @@ function personKey(person){return person.toLowerCase()}
 function pickKey(act){return act.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(db));$('viewingLabel').textContent=`VIEWING ${currentUser.toUpperCase()}’S PICKS`;setSaveStatus(firebaseReady?'SYNCED TO FIREBASE':'SAVED ON THIS DEVICE')}
 function runRemoteWrite(write){if(!profilesRef)return;if(!firebaseReady){pendingRemoteWrites.push(write);return}write().then(()=>setSaveStatus('SYNCED TO FIREBASE')).catch(()=>setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED'))}
-function persistRemotePick(person,act,value){runRemoteWrite(()=>profilesRef.child(personKey(person)).child(pickKey(act)).set(value||null))}
+function persistRemotePick(person,act,value){runRemoteWrite(()=>{const profileRef=profilesRef.child(personKey(person));if(legacyActNames[act])return profileRef.update({[pickKey(act)]:value||null,[pickKey(legacyActNames[act])]:null});return profileRef.child(pickKey(act)).set(value||null)})}
 function clearRemoteProfile(person){runRemoteWrite(()=>profilesRef.child(personKey(person)).remove())}
 function flushRemoteWrites(){const queued=pendingRemoteWrites.splice(0);queued.reduce((chain,write)=>chain.then(()=>write()).catch(()=>setSaveStatus('FIREBASE SYNC ISSUE · LOCAL COPY SAVED')),Promise.resolve())}
 function startFirebaseSync(){
